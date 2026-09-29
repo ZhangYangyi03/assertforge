@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "assertforge"
+version = "0.1.0"
+description = "LLM-generated formal assertions for RTL, proved by SymbiYosys"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "Apache-2.0"}
+authors = [{name = "Zhang Yangyi", email = "2936745@qq.com"}]
+keywords = ["formal-verification", "rtl", "eda", "llm", "symbiyosys", "sva"]
+classifiers = [
+  "Topic::Scientific/Engineering::Electronic Design Automation (EDA)",
+  "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/ZhangYangyi03/assertforge"
+
+[tool.setuptools]
+packages = ["assertforge"]

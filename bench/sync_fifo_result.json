@@ -1,0 +1,36 @@
+{
+  "design": "bench/designs/sync_fifo.v",
+  "top": "sync_fifo",
+  "intent": "the FIFO count must never exceed DEPTH and must never go negative; full must imply count==DEPTH-1",
+  "verdict": "SYNTAX",
+  "accepted": "always @(posedge clk) begin\n    assert(count >= 0);\n    assert(count < DEPTH);\n    assert(full -> count == DEPTH - 1);\nend",
+  "attempts": [
+    {
+      "attempt": 0,
+      "verdict": "ERROR",
+      "seconds": 0.81,
+      "seconds_total": 0.81,
+      "source": "always @(posedge clk) begin\n    assert(count >= 0 && count <= DEPTH);\n    assert(!full || (count == DEPTH - 1));\nend"
+    },
+    {
+      "attempt": 1,
+      "verdict": "ERROR",
+      "seconds": 0.86,
+      "seconds_total": 0.86,
+      "source": "always @(posedge clk) begin\n    assert(count >= 0 && count <= DEPTH - 1);\n    assert(!full || (count == DEPTH - 1));\nend"
+    },
+    {
+      "attempt": 2,
+      "verdict": "SYNTAX",
+      "seconds": 0.82,
+      "seconds_total": 0.82,
+      "source": "always @(posedge clk) begin\n    assert(count >= 0);\n    assert(count < DEPTH);\n    assert(full -> count == DEPTH - 1);\nend"
+    }
+  ],
+  "llm": {
+    "model": "Qwen3.5-Flash",
+    "calls": 3,
+    "seconds": 86.26,
+    "avg_s": 28.75
+  }
+}

@@ -1,0 +1,29 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: install solver
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq yosys z3
+          git clone --depth 1 https://github.com/YosysHQ/sby /tmp/sby
+          sudo make -C /tmp/sby install
+      - name: install package
+        run: pip install -e . pytest
+      - name: toolchain is really there
+        run: |
+          yosys -V
+          sby --version
+          z3 --version
+      - name: unit tests (no network needed)
+        run: pytest -q tests -k "not llm"
+      - name: measured grammar matrix
+        run: python -m assertforge grammar
