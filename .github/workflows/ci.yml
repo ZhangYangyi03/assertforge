@@ -16,6 +16,9 @@ jobs:
           sudo apt-get install -y -qq yosys z3
           git clone --depth 1 https://github.com/YosysHQ/sby /tmp/sby
           sudo make -C /tmp/sby install
+          # sby_core.py imports click; the Makefile does not pull it in and the
+          # missing dependency only shows up when sby is first run
+          pip install click
       - name: install package
         run: pip install -e . pytest
       - name: toolchain is really there

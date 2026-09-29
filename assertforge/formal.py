@@ -15,6 +15,7 @@ broke it.
 
 import base64
 import os
+import platform
 import re
 import subprocess
 import time
@@ -70,7 +71,13 @@ class FormalResult:
 
 
 def win_to_wsl(path):
-    """D:\\a\\b -> /mnt/d/a/b ; leaves unix paths alone."""
+    """Windows path -> WSL mount path. On Linux, a path is already usable.
+
+    Guarded on the platform rather than on the string, because os.path.abspath
+    on Linux on a relative path gives a real path that must NOT be rewritten.
+    """
+    if platform.system() != "Windows":
+        return path if os.path.isabs(path) else os.path.abspath(path)
     p = os.path.abspath(path).replace("\\", "/")
     m = re.match(r"^([A-Za-z]):/(.*)$", p)
     if m:
@@ -79,17 +86,22 @@ def win_to_wsl(path):
 
 
 def wsl_bash(script, timeout=120):
-    """Run a bash script inside WSL with the script carried as base64.
+    """Run a bash script where the solver lives. Portable across Windows and Linux.
 
-    Base64 rather than argv because this host passes non-ASCII arguments
-    through `wsl.exe` unreliably, and the project lives under a Chinese path.
+    On Windows the solver is installed inside WSL, and the script is carried
+    over `wsl.exe` as base64 -- base64 because this host passes non-ASCII argv
+    through wsl.exe unreliably and the project lives under a Chinese path. On
+    Linux bash is simply there and is called directly. Leaving this
+    Windows-only broke CI with FileNotFoundError: 'wsl' on ubuntu-latest.
     """
-    b64 = base64.b64encode(script.encode("utf-8")).decode("ascii")
-    cmd = "echo %s | base64 -d > /tmp/af_run.sh && bash /tmp/af_run.sh" % b64
+    if platform.system() == "Windows":
+        b64 = base64.b64encode(script.encode("utf-8")).decode("ascii")
+        cmd = ["wsl", "-d", WSL_DISTRO, "--", "bash", "-lc",
+               "echo %s | base64 -d > /tmp/af_run.sh && bash /tmp/af_run.sh" % b64]
+    else:
+        cmd = ["bash", "-lc", script]
     try:
-        r = subprocess.run(
-            ["wsl", "-d", WSL_DISTRO, "--", "bash", "-lc", cmd],
-            capture_output=True, timeout=timeout)
+        r = subprocess.run(cmd, capture_output=True, timeout=timeout)
         return (r.stdout or b"").decode("utf-8", "replace"), r.returncode
     except subprocess.TimeoutExpired:
         return "", -9
