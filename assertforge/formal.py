@@ -71,18 +71,28 @@ class FormalResult:
 
 
 def win_to_wsl(path):
-    """Windows path -> WSL mount path. On Linux, a path is already usable.
+    """Translate a Windows path to where the toolchain can see it.
 
-    Guarded on the platform rather than on the string, because os.path.abspath
-    on Linux on a relative path gives a real path that must NOT be rewritten.
+    Three cases, and getting any of them wrong is silent rather than loud:
+      Linux              the path is already usable -- do not touch it. Running
+                         os.path.abspath on a relative path here is right, but
+                         rewriting an absolute one produced '/mnt/d/tmp/x.v'.
+      already POSIX      leave it alone on every platform, so a caller passing
+                         '/tmp/x.v' (a WSL path, or a Linux path) is not mangled
+                         into '/mnt/d/tmp/x.v'.
+      Windows drive      D:\\a -> /mnt/d/a.
     """
     if platform.system() != "Windows":
         return path if os.path.isabs(path) else os.path.abspath(path)
-    p = os.path.abspath(path).replace("\\", "/")
+    if path.startswith("/"):
+        return _collapse(path) if "_collapse" in globals() else path
+    p = path.replace("\\", "/")
     m = re.match(r"^([A-Za-z]):/(.*)$", p)
     if m:
         return "/mnt/" + m.group(1).lower() + "/" + m.group(2)
-    return p
+    back = os.path.abspath(path).replace("\\", "/")
+    m = re.match(r"^([A-Za-z]):/(.*)$", back)
+    return "/mnt/" + m.group(1).lower() + "/" + m.group(2) if m else back
 
 
 def wsl_bash(script, timeout=120):
