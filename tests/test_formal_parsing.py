@@ -80,8 +80,18 @@ def test_params_absent_gives_empty_list():
     assert params_of("module m(input a); endmodule") == []
 
 
+def test_unix_paths_are_left_alone():
+    # win_to_wsl must be a no-op for a path that is already usable, on every
+    # platform: rewriting it produced '/home/runner/work/D:\\a\\b' in CI
+    assert formal.win_to_wsl("/tmp/x.v") == "/tmp/x.v"
+
+
 def test_win_path_maps_to_the_wsl_mount():
-    assert formal.win_to_wsl(r"D:\\a\\b") == "/mnt/d/a/b"
+    import platform
+    import pytest
+    if platform.system() != "Windows":
+        pytest.skip("the D:\\ -> /mnt/d/ translation is a Windows-only operation")
+    assert formal.win_to_wsl("D:\\a\\b") == "/mnt/d/a/b"
 
 
 def test_verdict_classification():
