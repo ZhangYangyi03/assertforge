@@ -95,3 +95,52 @@ class Client:
         avg = (self.seconds / self.calls) if self.calls else 0.0
         return {"model": self.model, "calls": self.calls,
                 "seconds": round(self.seconds, 2), "avg_s": round(avg, 2)}
+
+
+# -- the same surface, but the endpoint is a fixture instead of a gateway ----
+
+def replay_client(mode, candidates, vacuous_reply=None, model="replay-fixture"):
+    """A client that answers from recorded candidates, in order.
+
+    Why this exists: the loop's two feedback paths are only observable when the
+    first candidate is wrong, and a live model is not reproducible -- the same
+    intent produces a different assertion on the next call, so an ablation over a
+    live endpoint measures the endpoint's variance as much as the loop. A fixture
+    makes the comparison exact and, more importantly, free: the headline table in
+    the README must be re-derivable on a machine with no API key at all.
+
+    `mode` is the arm of the experiment, and it is what makes the arms differ for
+    a reason rather than by temperature:
+
+      oneshot   the model's text is taken verbatim (what a naive wrapper does)
+      raw       the text is returned unchanged for the loop to run the linter on
+      repaired  what `repair.normalise` produces (the model is *told* the
+                accepted subset, which is the only difference from `raw`)
+    """
+    class ReplayClient(Client):
+        def __init__(self):
+            self.base_url = "fixture://replay"
+            self.model = model
+            self.key = "-"
+            self.timeout = 0
+            self.max_retries = 1
+            self.temperature = 0.0
+            self.calls = 0
+            self.seconds = 0.0
+            self._queue = list(candidates)
+
+        def chat(self, prompt, system=None, max_tokens=1200, temperature=None):
+            self.calls += 1
+            idx = min(self.calls - 1, len(self._queue) - 1)
+            src = self._queue[idx] if self._queue else ""
+            if mode == "repaired":
+                from . import repair
+                src = repair.normalise(src).source
+            return "```systemverilog\n%s\n```" % src
+
+    return ReplayClient()
+
+
+def queue_after_first(first, rest):
+    """Fixture helper: the first reply, then `rest` for every later call."""
+    return [first] + list(rest)

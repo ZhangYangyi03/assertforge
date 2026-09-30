@@ -8,6 +8,6 @@ grades the output anywhere in the loop.
 
 __version__ = "0.1.0"
 
-from . import formal, grammar, llm, refine  # noqa: F401
+from . import compose, formal, grammar, llm, refine, repair, vacuity  # noqa: F401
 
-__all__ = ["formal", "grammar", "llm", "refine"]
+__all__ = ["compose", "formal", "grammar", "llm", "refine", "repair", "vacuity"]

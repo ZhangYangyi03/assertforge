@@ -1,0 +1,96 @@
+{
+  "name": "producer_fifo_top_width_fault",
+  "comment": "Interface fault, of the kind no assertion can see: the producer's 3-bit tally is wired to the FIFO's 8-bit data input. Legal Verilog, silent zero-extension, and the top five bits are always zero -- so every property about wr_data's high bits is a property about a constant. The interface check names it; the solver would only ever report it as a counterexample on some unrelated assertion, if at all.",
+  "inputs": [
+    {
+      "name": "clk"
+    },
+    {
+      "name": "rst"
+    },
+    {
+      "name": "en"
+    },
+    {
+      "name": "rd_en"
+    }
+  ],
+  "declares": [
+    {
+      "name": "prod_cnt",
+      "width": "[2:0]"
+    },
+    {
+      "name": "full"
+    },
+    {
+      "name": "empty"
+    },
+    {
+      "name": "count",
+      "width": "[2:0]"
+    },
+    {
+      "name": "rd_data",
+      "width": "[7:0]"
+    }
+  ],
+  "instances": [
+    {
+      "module": "counter",
+      "inst": "u_prod",
+      "file": "../../bench/designs/counter.v",
+      "params": {
+        "W": 3
+      },
+      "connections": {
+        "clk": "clk",
+        "rst": "rst",
+        "en": "en",
+        "cnt": "prod_cnt"
+      }
+    },
+    {
+      "module": "sync_fifo",
+      "inst": "u_fifo",
+      "file": "../../bench/designs/sync_fifo.v",
+      "params": {
+        "WIDTH": 8,
+        "DEPTH": 4
+      },
+      "connections": {
+        "clk": "clk",
+        "rst": "rst",
+        "wr_en": "en",
+        "wr_data": "prod_cnt",
+        "rd_en": "rd_en",
+        "rd_data": "rd_data",
+        "full": "full",
+        "empty": "empty",
+        "count": "count"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "name": "S1_write_cycle_moves_occupancy",
+      "expr": "!( $past(af_started) && !$past(rst) && $past(en) && !$past(rd_en) && ($past(count) > 0) && ($past(count) < 4) && (count == $past(count)) )",
+      "why": "mentions the producer's enable and the FIFO's occupancy, which are the two sides of the wire. No property of either block relates them, because the relation only exists in the assembly."
+    },
+    {
+      "name": "S2_read_cycle_moves_occupancy",
+      "expr": "!( $past(af_started) && !$past(rst) && $past(rd_en) && !$past(en) && ($past(count) > 0) && ($past(count) < 4) && (count == $past(count)) )",
+      "why": "the mirror of S1 on the read side; a wiring error on either carries it."
+    },
+    {
+      "name": "S3_quiet_cycle_leaves_occupancy_alone",
+      "expr": "!( $past(af_started) && !$past(rst) && !$past(en) && !$past(rd_en) && (count != $past(count)) )",
+      "why": "the decisive one. The FIFO cannot state this -- inside the FIFO, `wr_en` is whatever it is wired to. Only the assembly knows that no upstream block asked for anything this cycle."
+    },
+    {
+      "name": "S4_assembly_reset_contract",
+      "expr": "!$past(rst) || (count == 0 && prod_cnt == 0)",
+      "why": "control: a claim about both blocks' state in the same cycle. It holds on both twins, which is the point -- it shows that a seam assertion is not automatically a discriminating one, and the twin run reports which are which."
+    }
+  ]
+}

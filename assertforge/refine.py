@@ -23,7 +23,7 @@ import os
 import re
 import textwrap
 
-from . import formal, grammar, llm
+from . import formal, grammar, llm, repair
 
 SYSTEM = """You write SystemVerilog assertions for a formal verification tool.
 
@@ -102,6 +102,27 @@ tighten it. Do not simply delete the assertion. Parameter names from the design
 (like DEPTH or WIDTH) are available as localparams. Reply with the corrected
 assertion block only.
 """
+
+
+TWIN_PROMPT = """Your assertion PROVED, and it is worthless.
+
+The harness also ran it against a deliberately broken version of the same design
+-- one that is known to be wrong. Your assertion PROVED there too. A property
+that holds on a design that is broken is not checking the design; it is checking
+that the solver agrees two expressions are equal.
+
+Assertion you wrote:
+```systemverilog
+{prev}
+```
+
+Intent it was supposed to capture: {intent}
+
+Write it again so that the broken design FAILS the property while the correct one
+passes. Every signal of the design is available ({sigs}), parameter names like
+DEPTH are localparams, and each assertion must be guarded by `if (af_started)`.
+
+Output format: a single fenced ```systemverilog block, nothing else."""
 
 
 def strip_code(text):
@@ -248,37 +269,76 @@ def build_harness(dut_text, top, assertion_src, wrapper_name="assertions"):
 
 
 class Attempt:
-    def __init__(self, index, source, result):
+    """One candidate, everything that happened to it, and why it ended."""
+
+    def __init__(self, index, source, result, raw_source=None, repair=None,
+                 lint_before=None, twin=None):
         self.index = index
-        self.source = source
+        self.source = source            # what the solver was actually given
+        self.raw_source = raw_source if raw_source is not None else source
         self.result = result
         self.verdict = result.status
+        self.repair = repair
+        self.lint_before = list(lint_before or [])
+        self.twin = twin
+
+    @property
+    def rewritten(self):
+        return bool(self.repair and self.repair.changed)
 
     def to_dict(self):
-        return {"attempt": self.index, "verdict": self.verdict,
-                "seconds": round(self.result.seconds, 2),
-                "seconds_total": round(self.result.seconds, 2),
-                "source": self.source}
+        d = {"attempt": self.index, "verdict": self.verdict,
+             "seconds": round(self.result.seconds, 2),
+             "source": self.source,
+             "rewritten": self.rewritten,
+             "lint_before": self.lint_before}
+        if self.raw_source != self.source:
+            d["raw_source"] = self.raw_source
+        if self.repair:
+            d["repair"] = self.repair.to_dict()
+        if self.twin:
+            d["twin"] = self.twin
+        return d
 
 
 class Session:
-    """One DUT, one intent, N rounds of generate/refine."""
+    """One DUT, one intent, N rounds of generate/repair/refine.
+
+    The ablations are parameters rather than separate scripts on purpose: an
+    arm of an experiment and the tool it measures should be the same code path,
+    otherwise the comparison is between two implementations and not between two
+    strategies.
+
+      use_repair=False   take the model's text verbatim (the naive baseline)
+      use_refine=False   one round only; no counterexample or vacuity feedback
+      lint_retry=False   do not spend a model call re-asking after a lint failure
+    """
 
     def __init__(self, dut_path, top, intent, n_assertions=2, rounds=4,
-                 client=None, workdir=None, depth=10, timeout=180):
+                 client=None, workdir=None, depth=10, timeout=180,
+                 use_repair=True, use_refine=True, lint_retry=True,
+                 max_lint_retries=2, twin_path=None, twin_top=None):
         self.dut_path = dut_path
         self.top = top
         self.intent = intent
         self.n_assertions = n_assertions
         self.rounds = rounds
         self.client = client or llm.Client()
-        self.workdir = workdir or os.path.join(os.path.dirname(os.path.abspath(dut_path)), "_afwork")
+        self.workdir = workdir or os.path.join(
+            os.path.dirname(os.path.abspath(dut_path)), "_afwork")
         self.depth = depth
         self.timeout = timeout
+        self.use_repair = use_repair
+        self.use_refine = use_refine
+        self.lint_retry = lint_retry
+        self.max_lint_retries = max_lint_retries
+        self.twin_path = twin_path
+        self.twin_top = twin_top or top
         self.dut_text = open(dut_path, encoding="utf-8", errors="ignore").read()
         self.sigs = signals_of(self.dut_text)
         self.attempts = []
         self.llm_calls = 0
+        self.harness_failures = 0
 
     def _ask(self, prompt):
         self.llm_calls += 1
@@ -298,59 +358,179 @@ class Session:
             wd, wrapper_name, ["dut.v"], ["%s.sv" % wrapper_name],
             depth=self.depth, timeout=self.timeout)
 
-    def run(self):
-        feedback = ""
-        prev = None
-        for rnd in range(self.rounds):
-            tag = "r%d" % rnd
-            if prev is None:
-                prompt = USER.format(top=self.top, dut=self.dut_text,
-                                     n=self.n_assertions, intent=self.intent,
-                                     feedback="")
-                cand = self._ask(prompt)
-            else:
-                prompt = REFINE_PROMPT.format(intent=self.intent, prev=prev,
-                                              trace=last_trace)
-                cand = self._ask(prompt)
+    def verify_twin(self, cand, tag):
+        """Ground truth: does this accepted assertion catch the known bug?
 
-            problems = grammar.lint(cand)
-            if problems:
-                # A poison token is a generator bug. Ask again with the reasons,
-                # which is much cheaper than a solver run.
+        Only run when the caller supplied a twin, because it is the expensive
+        form of the check -- but it is the decisive one, so it is run once, on
+        the candidate that is about to be reported as the answer.
+        """
+        if not self.twin_path:
+            return None
+        from . import vacuity
+        return vacuity.against_twin(
+            self.twin_path, self.twin_top, cand,
+            os.path.join(self.workdir, tag + "_twin"),
+            depth=self.depth, timeout=self.timeout)
+
+    # -- one candidate, end to end -------------------------------------------
+
+    def propose(self, prev=None, last_trace="", first=True):
+        if prev is None or last_trace == "__none__":
+            prompt = USER.format(top=self.top, dut=self.dut_text,
+                                 n=self.n_assertions, intent=self.intent,
+                                 feedback="")
+        else:
+            prompt = REFINE_PROMPT.format(intent=self.intent, prev=prev,
+                                          trace=last_trace)
+        cand = self._ask(prompt)
+        lint_before = grammar.lint(cand)
+
+        if self.use_repair:
+            rep = repair.normalise(cand)
+            return cand, rep.source, rep, lint_before
+
+        if self.lint_retry:
+            tries = 0
+            while lint_before and tries < self.max_lint_retries:
                 cand = self._ask(
                     "Your reply used constructs this backend rejects:\n- "
-                    + "\n- ".join(problems) + "\nRewrite using only immediate "
-                    "assert/assume/cover inside always @(posedge clk). "
+                    + "\n- ".join(lint_before) + "\nRewrite using only immediate "
+                    "assert/assume/cover inside always @(posedge clk), every "
+                    "statement guarded by `if (af_started)`. "
                     "Intent unchanged: " + self.intent)
-                problems = grammar.lint(cand)
+                lint_before = grammar.lint(cand)
+                tries += 1
+        return cand, cand, None, lint_before
 
+    def run(self):
+        """Return the best Attempt. PROVED if any round proved a non-vacuous claim."""
+        rounds = self.rounds if self.use_refine else 1
+        prev, last_trace, best = None, "", None
+        for rnd in range(rounds):
+            tag = "r%d" % rnd
+            if rnd == 0 or prev is None:
+                prompt_prev = None
+            else:
+                prompt_prev = prev
+            if rnd == 0:
+                raw, cand, rep, lint_before = self.propose()
+            else:
+                raw, cand, rep, lint_before = self.propose(prev=prev,
+                                                           last_trace=last_trace)
             res = self._check(cand, tag)
-            att = Attempt(rnd, cand, res)
+            att = Attempt(rnd, cand, res, raw_source=raw, repair=rep,
+                          lint_before=lint_before)
             self.attempts.append(att)
 
             if res.status == formal.PROVED:
                 if not mentions_dut_signal(cand, self.sigs):
+                    # A proof that never touched a design signal is vacuous.
+                    att.verdict = "VACUOUS"
                     prev = cand
                     last_trace = ""
-                    cand = self._ask(VACUOUS_PROMPT.format(prev=cand,
-                                                           sigs=", ".join(self.sigs[:12]),
-                                                           intent=self.intent))
-                    res2 = self._check(cand, tag + "v")
-                    self.attempts[-1].verdict = "VACUOUS->" + res2.status
-                    att = Attempt(rnd, cand, res2)
-                    self.attempts.append(att)
+                    vraw, vcand, vrep, vlint = self.propose(
+                        prev=cand, last_trace="")
+                    vcand = strip_code(self._ask(VACUOUS_PROMPT.format(
+                        prev=cand, sigs=", ".join(self.sigs[:12]),
+                        intent=self.intent)))
+                    if self.use_repair:
+                        vrep = repair.normalise(vcand)
+                        vcand = vrep.source
+                    res2 = self._check(vcand, tag + "v")
+                    att2 = Attempt(rnd, vcand, res2, raw_source=vcand,
+                                   repair=vrep, lint_before=grammar.lint(vcand))
+                    att2.verdict = "VACUOUS->" + res2.status
+                    self.attempts.append(att2)
                     if res2.status == formal.PROVED:
-                        return att
-                    prev = cand
-                    last_trace = res2.trace_table() or res2.log[-800:]
+                        return att2
+                    prev = vcand
+                    last_trace = res2.trace_table() or key_error(res2.log)
+                    best = att2 if best is None else best
                     continue
+                tw = self.verify_twin(cand, tag)
+                att.twin = tw
+                if tw and tw["verdict"] == "MISSED_BUG":
+                    # Ground truth outranks the heuristic. `mentions_dut_signal`
+                    # looks for a design signal in the text, and a trivially
+                    # true property mentions one -- measured: `assert (count <=
+                    # DEPTH)` on a two-bit count passed the heuristic and also
+                    # proved against the known-broken twin. The twin is a real
+                    # mutant, so it is the gate; the heuristic is only the cheap
+                    # filter in front of it.
+                    att.verdict = "FALSE_PROVE"
+                    prev = cand
+                    last_trace = ""
+                    tvraw = self._ask(TWIN_PROMPT.format(
+                        prev=cand, intent=self.intent,
+                        sigs=", ".join(self.sigs[:12])))
+                    tvraw = strip_code(tvraw)
+                    tvrep = None
+                    if self.use_repair:
+                        tvrep = repair.normalise(tvraw)
+                        tvraw = tvrep.source
+                    res3 = self._check(tvraw, tag + "t")
+                    att3 = Attempt(rnd, tvraw, res3, raw_source=tvraw,
+                                   repair=tvrep, lint_before=grammar.lint(tvraw))
+                    att3.verdict = "TWIN->" + res3.status
+                    self.attempts.append(att3)
+                    if res3.status == formal.PROVED:
+                        att3.twin = self.verify_twin(tvraw, tag + "t")
+                        return att3
+                    best = att3
+                    prev = tvraw
+                    last_trace = res3.trace_table() or key_error(res3.log)
+                    continue
+                best = att
                 return att
 
+            best = att if best is None else best
             prev = cand
             if res.status in (formal.ERROR, formal.SYNTAX, formal.NOINPUT):
-                # A build failure is the generator's fault, not the design's.
-                # Give it the yosys error line, not the banner.
                 last_trace = key_error(res.log) or res.log[-600:]
             else:
                 last_trace = res.trace_table() or key_error(res.log)
-        return self.attempts[-1]
+            if not last_trace:
+                last_trace = res.log[-600:]
+        return best
+
+
+# -- experiment support -------------------------------------------------------
+
+ARMS = {
+    "oneshot_raw":   dict(use_repair=False, use_refine=False, lint_retry=False),
+    "lint_retry":    dict(use_repair=False, use_refine=True,  lint_retry=True),
+    "repair_once":   dict(use_repair=True,  use_refine=False, lint_retry=False),
+    "repair_refine": dict(use_repair=True,  use_refine=True,  lint_retry=True),
+}
+
+
+def outcome_of(att, design_has_bug=False):
+    """... a PROVED on a correct design whose twin check MISSED_BUG is a
+    FALSE_PROVE: the solver agreed with the assertion and the assertion was not
+    checking anything, which is the failure a proof-only tool cannot see."""
+    """Reduce an Attempt to the one word the experiment counts.
+
+    The categories are deliberately about the *claim*, because that is what the
+    tool is for:
+      PROVED      the solver proved a non-vacuous assertion
+      REFUTED     the solver found a counterexample (the design is wrong)
+      MALFORMED   the candidate never reached the solver -- a generator failure
+      OTHER       built, ran, and did neither
+    `MALFORMED` is the number the repair path is supposed to move.
+    """
+    if att is None:
+        return "NOATTEMPT"
+    twin = getattr(att, "twin", None)
+    if twin and twin.get("verdict") == "MISSED_BUG" and not design_has_bug:
+        return "FALSE_PROVE"
+    v = att.verdict
+    if v.startswith("VACUOUS->"):
+        v = v.split("->", 1)[1]
+    if v == formal.PROVED or v == "VACUOUS":
+        return "PROVED"
+    if v == formal.REFUTED:
+        return "REFUTED"
+    if v in (formal.SYNTAX, formal.ERROR, formal.NOINPUT):
+        return "MALFORMED"
+    return "OTHER"

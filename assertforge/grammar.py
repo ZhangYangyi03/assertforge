@@ -1,3 +1,6 @@
+import json
+import re
+
 """
 The assertion grammar that the backend solver actually accepts.
 
@@ -62,39 +65,63 @@ endmodule
 """
 
 
+def _position_of_tokens(candidate_src):
+    """Where the poison tokens actually are, as (token, index) pairs.
+
+    A substring test is not good enough and it produced a live false positive:
+    `assert (full -> count == DEPTH - 1)` DOES contain `->`, but so does
+    `count == DEPTH - 1`, and `x - 1` with a negation is a subtraction, not SVA.
+    The correction is to look at the shape: an implication operator sits at the
+    top level of an assertion argument, between two expressions. A subtraction
+    sits inside one.
+    """
+    from . import repair
+    hits = []
+    for c in repair._scan_calls(candidate_src):
+        for tok in ("|->", "|=>", "->"):
+            i = repair._top_level_find(c["arg"], tok)
+            if i is not None:
+                hits.append((c["kind"], tok))
+    return hits
+
+
 def lint(candidate_src):
     """Return a list of human-readable reasons the backend will reject this.
 
     Cheap and total: catching a poison token here saves a ~2s solver run per
     candidate, which matters because the generate/refine loop is the hot path.
+    Since `repair.normalise` exists the linter is no longer a rejection gate --
+    it is the trigger for a rewrite, and its remaining job is to report what a
+    rewrite could not fix.
     """
     problems = []
-    for tok in POISON:
+
+    # Constructs that are never valid anywhere in the accepted subset.
+    for tok, key in (("|=>", None), ("disable iff", "disable_iff"),
+                     ("endproperty", "named_property"),
+                     ("endsequence", None), ("clocking", "clocking_block")):
         if tok in candidate_src:
-            reason = REJECTED.get(
-                {
-                    "->": "arrow_implication",
-                    "|->": "implication_operator",
-                    "disable iff": "disable_iff",
-                    "$rose": "sva_rose",
-                    "$fell": "sva_fell",
-                    "$stable": "sva_stable",
-                    "endproperty": "named_property",
-                    "clocking": "clocking_block",
-                }.get(tok, ""),
-                None,
-            )
-            if reason:
-                problems.append("unsupported construct %r: %s" % (tok, reason))
-            else:
-                problems.append("unsupported construct %r" % tok)
-    if "assert property" in candidate_src and "always" not in candidate_src:
-        problems.append(
-            "assert property at module level: %s"
-            % REJECTED["module_level_assert_property"]
-        )
-    if "assert" not in candidate_src and "assume" not in candidate_src \
-            and "cover" not in candidate_src:
+            reason = REJECTED.get(key, None) if key else None
+            problems.append("unsupported construct %r%s"
+                            % (tok, (": " + reason) if reason else ""))
+
+    # Tokens whose meaning depends on position or on being called.
+    for tok, key in (("$rose", "sva_rose"), ("$fell", "sva_fell"),
+                     ("$stable", "sva_stable")):
+        if re.search(re.escape(tok) + r"\s*\(", candidate_src):
+            problems.append("unsupported construct %r: %s" % (tok, REJECTED[key]))
+
+    for _kind, tok in _position_of_tokens(candidate_src):
+        problems.append("unsupported construct %r: %s"
+                        % (tok, REJECTED.get(
+                            {"|->": "implication_operator",
+                             "->": "arrow_implication"}.get(tok, ""), "")))
+
+    if "assert property" in candidate_src and "always" not in candidate_src \
+            and "endproperty" not in candidate_src:
+        problems.append("assert property at module level: %s"
+                        % REJECTED["module_level_assert_property"])
+    if not re.search(r"\b(assert|assume|cover)\b", candidate_src):
         problems.append("candidate contains no assert/assume/cover statement")
     return problems
 
@@ -145,4 +172,3 @@ def as_json():
     )
 
 
-import json  # noqa: E402  (kept at the bottom so the data above reads first)

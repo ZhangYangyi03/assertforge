@@ -1,0 +1,100 @@
+{
+  "name": "producer_fifo_top_blockprops",
+  "comment": "The correct assembly judged by the two blocks' own properties, for the 2x2.",
+  "inputs": [
+    {
+      "name": "clk"
+    },
+    {
+      "name": "rst"
+    },
+    {
+      "name": "en"
+    },
+    {
+      "name": "rd_en"
+    },
+    {
+      "name": "wr_data",
+      "width": "[7:0]"
+    }
+  ],
+  "declares": [
+    {
+      "name": "prod_cnt",
+      "width": "[2:0]"
+    },
+    {
+      "name": "full"
+    },
+    {
+      "name": "empty"
+    },
+    {
+      "name": "count",
+      "width": "[2:0]"
+    },
+    {
+      "name": "rd_data",
+      "width": "[7:0]"
+    }
+  ],
+  "instances": [
+    {
+      "module": "counter",
+      "inst": "u_prod",
+      "file": "../../bench/designs/counter.v",
+      "params": {
+        "W": 3
+      },
+      "connections": {
+        "clk": "clk",
+        "rst": "rst",
+        "en": "en",
+        "cnt": "prod_cnt"
+      }
+    },
+    {
+      "module": "sync_fifo",
+      "inst": "u_fifo",
+      "file": "../../bench/designs/sync_fifo.v",
+      "params": {
+        "WIDTH": 8,
+        "DEPTH": 4
+      },
+      "connections": {
+        "clk": "clk",
+        "rst": "rst",
+        "wr_en": "en",
+        "wr_data": "wr_data",
+        "rd_en": "rd_en",
+        "rd_data": "rd_data",
+        "full": "full",
+        "empty": "empty",
+        "count": "count"
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "name": "B1_counter_advances_by_exactly_one",
+      "expr": "!(!$past(rst) && $past(af_started) && $past(en) && (prod_cnt != $past(prod_cnt) + 1'b1))",
+      "why": "the counter's own property, stated on the counter's own ports"
+    },
+    {
+      "name": "B2_fifo_occupancy_bounded_by_depth",
+      "expr": "(count <= 4)",
+      "why": "the FIFO's own property, stated on the FIFO's own state"
+    },
+    {
+      "name": "B3_fifo_full_means_full",
+      "expr": "(full == (count == 4))",
+      "why": "the FIFO's own property on its own derived output"
+    },
+    {
+      "name": "B4_fifo_empty_means_empty",
+      "expr": "(empty == (count == 0))",
+      "why": "the FIFO's own property on its own derived output"
+    }
+  ]
+}

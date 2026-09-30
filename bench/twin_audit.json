@@ -1,0 +1,84 @@
+{
+  "rows": [
+    {
+      "design": "counter",
+      "tag": "counter_grammar_s0",
+      "main": "REFUTED",
+      "twin": "REFUTED",
+      "rewrites": "no rewrite needed",
+      "mutation_verdict": "UNDECIDED",
+      "mutants_refuted": 0,
+      "mutants_tried": 0,
+      "accepted_but_missed_bug": false,
+      "source": "always @(posedge clk) if (af_started) begin\n    assert (!en || (cnt == $past(cnt) + 1));\n    assert (en || (cnt == $past(cnt)));\nend"
+    },
+    {
+      "design": "counter",
+      "tag": "counter_plain_s0",
+      "main": "REFUTED",
+      "twin": "REFUTED",
+      "rewrites": "no rewrite needed",
+      "mutation_verdict": "UNDECIDED",
+      "mutants_refuted": 0,
+      "mutants_tried": 0,
+      "accepted_but_missed_bug": false,
+      "source": "always @(posedge clk) if (af_started) begin\n    assert (!en || (cnt == $past(cnt) + 1));\n    assert (en || (cnt == $past(cnt)));\nend"
+    },
+    {
+      "design": "traffic_fsm",
+      "tag": "traffic_fsm_grammar_s0",
+      "main": "PROVED",
+      "twin": "REFUTED",
+      "rewrites": "no rewrite needed",
+      "mutation_verdict": "UNDECIDED",
+      "mutants_refuted": 0,
+      "mutants_tried": 0,
+      "accepted_but_missed_bug": false,
+      "source": "always @(posedge clk) if (af_started) begin\n    assert (state == 2'd0 || state == 2'd1 || state == 2'd2 || state == 2'd3);\n    assert (($past(state) != 2'd0) || (state != 2'd2));\nend"
+    },
+    {
+      "design": "traffic_fsm",
+      "tag": "traffic_fsm_plain_s0",
+      "main": "PROVED",
+      "twin": "REFUTED",
+      "rewrites": "no rewrite needed",
+      "mutation_verdict": "UNDECIDED",
+      "mutants_refuted": 0,
+      "mutants_tried": 0,
+      "accepted_but_missed_bug": false,
+      "source": "always @(posedge clk) if (af_started) begin\n    assert (state == 2'd0 || state == 2'd1 || state == 2'd2 || state == 2'd3);\n    assert (($past(state) != 2'd0) || (state != 2'd2));\nend"
+    }
+  ],
+  "weak_property_rows": [
+    {
+      "design": "counter",
+      "tag": "counter_weak",
+      "main": "PROVED",
+      "twin": "PROVED",
+      "rewrites": "no rewrite needed",
+      "mutation_verdict": "UNDECIDED",
+      "mutants_refuted": 0,
+      "mutants_tried": 0,
+      "accepted_but_missed_bug": true,
+      "source": "always @(posedge clk) if (af_started) assert (cnt <= 4'd15);",
+      "is_handwritten_control": true
+    },
+    {
+      "design": "traffic_fsm",
+      "tag": "traffic_fsm_weak",
+      "main": "PROVED",
+      "twin": "PROVED",
+      "rewrites": "no rewrite needed",
+      "mutation_verdict": "UNDECIDED",
+      "mutants_refuted": 0,
+      "mutants_tried": 0,
+      "accepted_but_missed_bug": true,
+      "source": "always @(posedge clk) if (af_started) assert (state <= 2'd3);",
+      "is_handwritten_control": true
+    }
+  ],
+  "accepted_proofs": 4,
+  "accepted_that_missed_the_bug": 2,
+  "weak_properties_proved_and_missed_the_bug": 2,
+  "designs_audited": 5
+}
