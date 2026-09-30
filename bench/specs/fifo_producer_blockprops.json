@@ -96,5 +96,17 @@
       "expr": "(empty == (count == 0))",
       "why": "the FIFO's own property on its own derived output"
     }
+  ],
+  "outputs": [
+    {
+      "name": "rd_data",
+      "width": "[7:0]"
+    },
+    {
+      "name": "empty"
+    },
+    {
+      "name": "full"
+    }
   ]
 }

@@ -43,7 +43,7 @@ rate faster than a person can read it.
 
 ## What is actually new here
 
-Three things, and all three are measurements rather than opinions.
+Four things, and all four are measurements rather than opinions.
 
 1. A measured grammar of what the open-source backend accepts. The industry
    standard is SVA (IEEE 1800). Yosys 0.33 implements a strict subset of it, and
@@ -76,7 +76,16 @@ Three things, and all three are measurements rather than opinions.
    no way to tell "my assertion is wrong" from "the design is wrong"; this loop
    makes the distinction computable.
 
-## 3. Integration is a separate level of proof, and it is measurable
+3. A deterministic rewriter that turns correct SVA into the subset the backend
+   actually parses, so the model's knowledge of SVA stops being a liability. The
+   ablation below measures it: on prompts that contain no knowledge of the subset,
+   asking the model again recovers nothing and the rewriter recovers a design.
+
+4. Integration as a measurable level of proof, not an aspiration. A block-level
+   flow passes a mis-wired assembly, and that is demonstrated in four solver runs
+   rather than asserted.
+
+## Integration is a separate level of proof, and it is measurable
 
 The two sections above are about one block. That is where formal verification
 usually stops, and it is the wrong place to stop, because the bugs that reach
@@ -126,9 +135,16 @@ it. Generating rather than writing is what makes the claim checkable -- a diff o
 two generated files is the diff of two assemblies, and a reviewer can see that the
 only change is one connection.
 
-    bench/specs/fifo_producer.json           one wiring
-    bench/specs/fifo_producer_broken.json    one connection different
+    bench/specs/fifo_producer.json              one wiring
+    bench/specs/fifo_producer_broken.json       one connection different
     bench/specs/fifo_producer_width_fault.json  a shared net that cannot hold its value
+
+A spec declares the assembly's inputs AND its outputs, names the blocks and their
+parameters, gives each connection by port name, and lists the seam claims with a
+one-line reason why each is a seam and not a block property. The reason is not
+decoration: `S4` in the shipped spec is a control that holds on both twins, which
+is how the bench reports that a seam assertion is not automatically a
+discriminating one.
 
 ### The interface check, and the fault no assertion can see
 
@@ -150,6 +166,69 @@ first version accused every shared clock of being a double driver.
 What it does not do: it compares **declared interfaces in the source**. It cannot
 see whether two parts are manufactured within tolerance, and it does not pretend
 to. The analogue of a mirror alignment is not a property of the text.
+
+## The ablation, and what it actually measures
+
+The claim "the loop is what makes this work" is testable, so it is tested. Four
+arms, five designs, one recorded model sample per design per arm -- the same text
+replayed, so the arms differ by the mechanism and not by the model's run-to-run
+variance. `bench/transcripts.json` is a real recording from the endpoint; the
+ablation replays it offline in a few seconds.
+
+    arm             what it does
+    oneshot_raw     one shot: propose, lint, solve. no retry
+    lint_retry      on a lint failure or a refutation, ask the model again
+    repair_once     on a lint failure, apply the deterministic SVA rewriter instead
+    repair_refine   the rewriter, then refinement on a refutation
+
+    python bench/run_ablation.py --mode fixture --prompt grammar
+    python bench/run_ablation.py --mode fixture --prompt plain
+
+Two prompt arms, because the second axis is the one people argue about. The
+`grammar` arm's system prompt carries the measured support matrix. The `plain` arm
+is the ordinary request -- "write industrial-style assertions" -- with none of it.
+
+    prompt=grammar            sync_fifo  counter    fsm        fifo_buggy  rr_arbiter   PROVED   solver_s
+    oneshot_raw               PROVED     REFUTED    PROVED     REFUTED     REFUTED      2/5      4.2
+    lint_retry                PROVED     REFUTED    PROVED     REFUTED     REFUTED      2/5      8.8
+    repair_once               PROVED     REFUTED    PROVED     REFUTED     REFUTED      2/5      4.1
+    repair_refine             PROVED     REFUTED    PROVED     REFUTED     REFUTED      2/5      8.9
+
+    prompt=plain              sync_fifo  counter    fsm        fifo_buggy  rr_arbiter   PROVED   solver_s
+    oneshot_raw               MALFORMED  MALFORMED  MALFORMED  MALFORMED   MALFORMED    0/5      2.3
+    lint_retry                MALFORMED  MALFORMED  MALFORMED  MALFORMED   MALFORMED    0/5      7.0
+    repair_once               PROVED     MALFORMED  MALFORMED  MALFORMED   REFUTED      1/5      3.3
+    repair_refine             PROVED     MALFORMED  MALFORMED  MALFORMED   REFUTED      1/5      7.8
+
+Three things in that table are worth more than the PROVED column, and two of them
+are unflattering to the loop.
+
+**1. The grammar appendix is the load-bearing part.** Wipe it out of the prompt and
+the score goes from 2/5 to 0/5: every single design MALFORMED, which means the
+model wrote textbook SVA that Yosys cannot parse. That is the entire argument for
+section 1, and it is now a number rather than a claim.
+
+**2. The deterministic rewriter does the retry's job at half the solver cost.**
+`repair_once` and `lint_retry` reach the same 2/5 on the grammar arm, but 4.1
+solver-seconds against 8.8. On the plain arm the gap is starker: `lint_retry`
+spends 7.0 seconds and recovers nothing, while `repair_once` recovers one design
+for 3.3. Asking the model again is the expensive way to do what a rewriter does
+for free -- and on the plain arm it does not work at all, because the model has no
+way to know what the backend will reject.
+
+**3. More mechanism does not mean more proof, and the table says so.** On the
+grammar arm all four arms land on 2/5. `repair_refine` costs twice the solver time
+of `repair_once` and proves exactly the same set. The failures it cannot fix are
+the interesting ones: `counter` and `rr_arbiter` are not malformed, they are
+refuted, and no amount of reshaping the syntax touches them. Those need the claim
+to change -- which is what refinement is for, and on these two designs refinement
+does not find it inside the round budget. A README that reported only the PROVED
+column would call that a draw.
+
+What the table does not show, and should not be read as: five small designs is not
+a benchmark, `rr_arbiter` fails for a reason specific to how the intent was
+phrased, and the fixture replays one sample per cell. The numbers are honest about
+what they measured; they are not a claim about a class of designs.
 
 ## Install
 

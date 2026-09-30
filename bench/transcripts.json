@@ -1,0 +1,155 @@
+{
+  "endpoint": "https://aiping.cn/api/v1",
+  "user_prompt_template": "Design under test (module `{top}`):\n\n```systemverilog\n{dut}\n```\n\nWrite {n} assertion(s) capturing this intent:\n{intent}\n{feedback}\n",
+  "by_prompt": {
+    "grammar": {
+      "counter": {
+        "design": "counter",
+        "model": "Qwen3.5-Flash",
+        "prompt": "grammar",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 72.1,
+            "raw": "```systemverilog\nalways @(posedge clk) if (af_started) begin\n    assert (!en || (cnt == $past(cnt) + 1));\n    assert (en || (cnt == $past(cnt)));\nend\n```",
+            "code": "always @(posedge clk) if (af_started) begin\n    assert (!en || (cnt == $past(cnt) + 1));\n    assert (en || (cnt == $past(cnt)));\nend"
+          }
+        ]
+      },
+      "traffic_fsm": {
+        "design": "traffic_fsm",
+        "model": "Qwen3.5-Flash",
+        "prompt": "grammar",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 51.61,
+            "raw": "```systemverilog\nalways @(posedge clk) if (af_started) begin\n    assert (state == 2'd0 || state == 2'd1 || state == 2'd2 || state == 2'd3);\n    assert (!($past(state) == 2'd0 && state == 2'd2));\nend\n```",
+            "code": "always @(posedge clk) if (af_started) begin\n    assert (state == 2'd0 || state == 2'd1 || state == 2'd2 || state == 2'd3);\n    assert (!($past(state) == 2'd0 && state == 2'd2));\nend"
+          }
+        ]
+      },
+      "sync_fifo": {
+        "design": "sync_fifo",
+        "model": "Qwen3.5-Flash",
+        "prompt": "grammar",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 7.34,
+            "raw": "```systemverilog\nalways @(posedge clk) if (af_started) begin\n    assert (count >= 0 && count <= DEPTH && full == (count == DEPTH));\n    assert (empty == (count == 0));\nend\n```",
+            "code": "always @(posedge clk) if (af_started) begin\n    assert (count >= 0 && count <= DEPTH && full == (count == DEPTH));\n    assert (empty == (count == 0));\nend"
+          }
+        ]
+      },
+      "sync_fifo_buggy": {
+        "design": "sync_fifo_buggy",
+        "model": "Qwen3.5-Flash",
+        "prompt": "grammar",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 103.24,
+            "raw": "```systemverilog\nalways @(posedge clk) if (af_started) begin\n    assert (count <= DEPTH);\n    assert ((full == (count == DEPTH)) && (empty == (count == 0)));\nend\n```",
+            "code": "always @(posedge clk) if (af_started) begin\n    assert (count <= DEPTH);\n    assert ((full == (count == DEPTH)) && (empty == (count == 0)));\nend"
+          }
+        ]
+      },
+      "rr_arbiter": {
+        "design": "rr_arbiter",
+        "model": "Qwen3.5-Flash",
+        "prompt": "grammar",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 67.88,
+            "raw": "```systemverilog\nalways @(posedge clk) if (af_started) begin\n    assert ((grant == 0) || (grant & (grant - 1) == 0));\n    assert ((grant & ~req) == 0);\nend\n```",
+            "code": "always @(posedge clk) if (af_started) begin\n    assert ((grant == 0) || (grant & (grant - 1) == 0));\n    assert ((grant & ~req) == 0);\nend"
+          }
+        ]
+      }
+    },
+    "plain": {
+      "sync_fifo": {
+        "design": "sync_fifo",
+        "model": "Qwen3.5-Flash",
+        "prompt": "plain",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 146.77,
+            "raw": "```systemverilog\nproperty p_count_bounds;\n    @(posedge clk) disable iff (rst)\n        (count >= 0) && (count <= DEPTH);\nendproperty\n\nproperty p_status_consistency;\n    @(posedge clk) disable iff (rst)\n        (full == (count == DEPTH)) && (empty == (count == 0));\nendproperty\n\nassert property (p_count_bounds);\nassert property (p_status_consistency);\n```",
+            "code": "property p_count_bounds;\n    @(posedge clk) disable iff (rst)\n        (count >= 0) && (count <= DEPTH);\nendproperty\n\nproperty p_status_consistency;\n    @(posedge clk) disable iff (rst)\n        (full == (count == DEPTH)) && (empty == (count == 0));\nendproperty\n\nassert property (p_count_bounds);\nassert property (p_status_consistency);"
+          }
+        ]
+      },
+      "counter": {
+        "design": "counter",
+        "model": "Qwen3.5-Flash",
+        "prompt": "plain",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 68.06,
+            "raw": "```systemverilog\nmodule counter_assertions #(parameter W = 4) (\n    input wire clk,\n    input wire rst,\n    input wire en,\n    input wire [W-1:0] cnt\n);\n\n    // Property: Counter must increment by exactly 1 when enabled.\n    // Ensures no skipping or jumping occurs during active cycles.\n    property p_cnt_increment;\n        @(posedge clk) disable iff (rst)\n            en |-> (cnt == $past(cnt) + 1'b1);\n    endproperty\n\n    // Property: Counter must hold value when disabled.\n    // Ensures no unintended state changes occur when not enabled.\n    property p_cnt_hold;\n        @(posedge clk) disable iff (rst)\n            !en |-> (cnt == $past(cnt));\n    endproperty\n\n    // Assertion: Enforce increment behavior\n    ap_cnt_increment: assert property (p_cnt_increment);\n\n    // Assertion: Enforce hold behavior\n    ap_cnt_hold: assert property (p_cnt_hold);\n\nendmodule\n```",
+            "code": "module counter_assertions #(parameter W = 4) (\n    input wire clk,\n    input wire rst,\n    input wire en,\n    input wire [W-1:0] cnt\n);\n\n    // Property: Counter must increment by exactly 1 when enabled.\n    // Ensures no skipping or jumping occurs during active cycles.\n    property p_cnt_increment;\n        @(posedge clk) disable iff (rst)\n            en |-> (cnt == $past(cnt) + 1'b1);\n    endproperty\n\n    // Property: Counter must hold value when disabled.\n    // Ensures no unintended state changes occur when not enabled.\n    property p_cnt_hold;\n        @(posedge clk) disable iff (rst)\n            !en |-> (cnt == $past(cnt));\n    endproperty\n\n    // Assertion: Enforce increment behavior\n    ap_cnt_increment: assert property (p_cnt_increment);\n\n    // Assertion: Enforce hold behavior\n    ap_cnt_hold: assert property (p_cnt_hold);\n\nendmodule"
+          }
+        ]
+      },
+      "traffic_fsm": {
+        "design": "traffic_fsm",
+        "model": "Qwen3.5-Flash",
+        "prompt": "plain",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 53.14,
+            "raw": "```systemverilog\n// Assertion 1: State Encoding Validity\n// Ensures the state register always holds one of the four defined legal values.\nproperty p_state_legal;\n    @(posedge clk) disable iff (rst) state inside {RED, RED_YELLOW, GREEN, YELLOW};\nendproperty\nassert_property(p_state_legal);\n\n// Assertion 2: Transition Order\n// Ensures the light never transitions directly from RED to GREEN.\n// Captures the invariant that RED must be followed by RED_YELLOW.\nproperty p_no_red_to_green;\n    @(posedge clk) disable iff (rst) (state == RED |-> ##1 state != GREEN);\nendproperty\nassert_property(p_no_red_to_green);\n```",
+            "code": "// Assertion 1: State Encoding Validity\n// Ensures the state register always holds one of the four defined legal values.\nproperty p_state_legal;\n    @(posedge clk) disable iff (rst) state inside {RED, RED_YELLOW, GREEN, YELLOW};\nendproperty\nassert_property(p_state_legal);\n\n// Assertion 2: Transition Order\n// Ensures the light never transitions directly from RED to GREEN.\n// Captures the invariant that RED must be followed by RED_YELLOW.\nproperty p_no_red_to_green;\n    @(posedge clk) disable iff (rst) (state == RED |-> ##1 state != GREEN);\nendproperty\nassert_property(p_no_red_to_green);"
+          }
+        ]
+      },
+      "sync_fifo_buggy": {
+        "design": "sync_fifo_buggy",
+        "model": "Qwen3.5-Flash",
+        "prompt": "plain",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 10.49,
+            "raw": "```systemverilog\nmodule sync_fifo_buggy_assertions #(parameter WIDTH = 8, parameter DEPTH = 4) (\n    input  wire             clk,\n    input  wire             rst,\n    input  wire             wr_en,\n    input  wire [WIDTH-1:0] wr_data,\n    input  wire             rd_en,\n    output reg  [WIDTH-1:0] rd_data,\n    output reg              full,\n    output reg              empty,\n    output reg  [1:0]       count\n);\n\n    // Property 1: Full is asserted exactly when count equals DEPTH\n    property p_full_correct;\n        @(posedge clk) disable iff (rst)\n        full |-> (count == DEPTH);\n    endproperty\n\n    // Property 2: Empty is asserted exactly when count equals 0\n    property p_empty_correct;\n        @(posedge clk) disable iff (rst)\n        empty |-> (count == 0);\n    endproperty\n\n    // Property 3: Count never exceeds DEPTH\n    property p_count_bound;\n        @(posedge clk) disable iff (rst)\n        count <= DEPTH;\n    endproperty\n\n    // Assertions\n    assert property (p_full_correct) else $error(\"Full assertion failed: full=%b count=%d\", full, count);\n    assert property (p_empty_correct) else $error(\"Empty assertion failed: empty=%b count=%d\", empty, count);\n    assert property (p_count_bound) else $error(\"Count bound violated: count=%d > DEPTH=%d\", count, DEPTH);\n\nendmodule\n```",
+            "code": "module sync_fifo_buggy_assertions #(parameter WIDTH = 8, parameter DEPTH = 4) (\n    input  wire             clk,\n    input  wire             rst,\n    input  wire             wr_en,\n    input  wire [WIDTH-1:0] wr_data,\n    input  wire             rd_en,\n    output reg  [WIDTH-1:0] rd_data,\n    output reg              full,\n    output reg              empty,\n    output reg  [1:0]       count\n);\n\n    // Property 1: Full is asserted exactly when count equals DEPTH\n    property p_full_correct;\n        @(posedge clk) disable iff (rst)\n        full |-> (count == DEPTH);\n    endproperty\n\n    // Property 2: Empty is asserted exactly when count equals 0\n    property p_empty_correct;\n        @(posedge clk) disable iff (rst)\n        empty |-> (count == 0);\n    endproperty\n\n    // Property 3: Count never exceeds DEPTH\n    property p_count_bound;\n        @(posedge clk) disable iff (rst)\n        count <= DEPTH;\n    endproperty\n\n    // Assertions\n    assert property (p_full_correct) else $error(\"Full assertion failed: full=%b count=%d\", full, count);\n    assert property (p_empty_correct) else $error(\"Empty assertion failed: empty=%b count=%d\", empty, count);\n    assert property (p_count_bound) else $error(\"Count bound violated: count=%d > DEPTH=%d\", count, DEPTH);\n\nendmodule"
+          }
+        ]
+      },
+      "rr_arbiter": {
+        "design": "rr_arbiter",
+        "model": "Qwen3.5-Flash",
+        "prompt": "plain",
+        "temperature": 0.2,
+        "samples": [
+          {
+            "sample": 0,
+            "seconds": 79.06,
+            "raw": "```systemverilog\nmodule rr_arbiter_assertions #(parameter N = 4) (\n    input  wire         clk,\n    input  wire         rst,\n    input  wire [N-1:0] req,\n    input  wire [N-1:0] grant\n);\n\n    property p_onehot_or_zero;\n        @(posedge clk) $onehot0(grant);\n    endproperty\n\n    property p_grant_subset_req;\n        @(posedge clk) (grant & ~req) == 0;\n    endproperty\n\n    assert property (p_onehot_or_zero);\n    assert property (p_grant_subset_req);\n\nendmodule\n```",
+            "code": "module rr_arbiter_assertions #(parameter N = 4) (\n    input  wire         clk,\n    input  wire         rst,\n    input  wire [N-1:0] req,\n    input  wire [N-1:0] grant\n);\n\n    property p_onehot_or_zero;\n        @(posedge clk) $onehot0(grant);\n    endproperty\n\n    property p_grant_subset_req;\n        @(posedge clk) (grant & ~req) == 0;\n    endproperty\n\n    assert property (p_onehot_or_zero);\n    assert property (p_grant_subset_req);\n\nendmodule"
+          }
+        ]
+      }
+    }
+  },
+  "recorded_at": "2026-09-30 11:59:31",
+  "system_prompts": {
+    "grammar": "You write SystemVerilog assertions for a formal verification tool.\n\nHARD CONSTRAINTS -- violations are rejected by the tool, not fixed by it:\n- Emit ONLY `assert`, `assume` or `cover` statements inside `always @(posedge clk)` blocks.\n- Forbidden: `assert property (...)` at module level, named `property ... endproperty`,\n  `disable iff`, `|->`, `=>`, `->`, `$rose`, `$fell`, `$stable`, `sequence`, `clocking`.\n- `$past(sig)` and `$past(sig, n)` ARE allowed.\n\nTHE RESET CONTRACT -- this is measured, and getting it wrong is the most common failure:\n- The DUT powers up in an arbitrary state. Cycle 0 accepts anything, so an\n  assertion about a design output is NOT provable at cycle 0 unless it is\n  guarded. The harness drives `rst` high at cycle 0 to fix that.\n- The harness defines a register `af_started` which is 0 at cycle 0 and 1 after.\n  EVERY assertion about the design must be guarded: wrap the body in\n  `if (af_started) begin ... end`.\n- Ranges and parameter names of the design (DEPTH, WIDTH) are available as\n  localparams in the harness.\n\nQUALITY CONSTRAINTS -- an assertion that is always true is worthless:\n- Every assertion must mention at least one signal of the design under test.\n- Do not write `assert(1)`, `assert(x == x)`, or an implication guarded by 0.\n- State the invariant that must hold, in terms of the design's own signals.\n\nGOOD EXAMPLE for a counter with parameter DEPTH:\n```systemverilog\nalways @(posedge clk) if (af_started) begin\n    assert (count <= DEPTH);\n    assert (full == (count == DEPTH));\nend\n```\n\nOutput format: a single fenced ```systemverilog block, nothing else.",
+    "plain": "You are a hardware verification engineer.\nWrite SystemVerilog assertions for the design under test that capture the stated\nintent, in the style used by industrial formal verification tools. Output a single\nfenced ```systemverilog block containing only the assertions."
+  }
+}

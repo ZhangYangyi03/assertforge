@@ -1,0 +1,475 @@
+{
+  "mode": "fixture",
+  "rounds": 3,
+  "depth": 12,
+  "candidate_source": "recorded 2026-09-30 11:59:31 from https://aiping.cn/api/v1",
+  "prompt_arm": "grammar",
+  "sample": "0",
+  "designs": [
+    "sync_fifo",
+    "counter",
+    "traffic_fsm",
+    "sync_fifo_buggy",
+    "rr_arbiter"
+  ],
+  "arms": [
+    "oneshot_raw",
+    "lint_retry",
+    "repair_once",
+    "repair_refine"
+  ],
+  "results": [
+    {
+      "design": "sync_fifo",
+      "arm": "oneshot_raw",
+      "outcome": "PROVED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": false,
+      "twin": {
+        "verdict": "CAUGHT_BUG",
+        "twin_status": "REFUTED",
+        "seconds": 0.85,
+        "trace_cycles": 4
+      },
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.98,
+      "wall_s": 1.9,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (count >= 0 && count <= DEPTH && full == (count == DEPTH));\n    assert (empty == (count == 0));\nend",
+      "verdicts": [
+        "PROVED"
+      ]
+    },
+    {
+      "design": "counter",
+      "arm": "oneshot_raw",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": false,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.76,
+      "wall_s": 0.8,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (!en || (cnt == $past(cnt) + 1));\n    assert (en || (cnt == $past(cnt)));\nend",
+      "verdicts": [
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "traffic_fsm",
+      "arm": "oneshot_raw",
+      "outcome": "PROVED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": false,
+      "twin": {
+        "verdict": "CAUGHT_BUG",
+        "twin_status": "REFUTED",
+        "seconds": 0.76,
+        "trace_cycles": 4
+      },
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.82,
+      "wall_s": 1.6,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (state == 2'd0 || state == 2'd1 || state == 2'd2 || state == 2'd3);\n    assert (!($past(state) == 2'd0 && state == 2'd2));\nend",
+      "verdicts": [
+        "PROVED"
+      ]
+    },
+    {
+      "design": "sync_fifo_buggy",
+      "arm": "oneshot_raw",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": false,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.83,
+      "wall_s": 0.8,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (count <= DEPTH);\n    assert ((full == (count == DEPTH)) && (empty == (count == 0)));\nend",
+      "verdicts": [
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "rr_arbiter",
+      "arm": "oneshot_raw",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": false,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.79,
+      "wall_s": 0.8,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert ((grant == 0) || (grant & (grant - 1) == 0));\n    assert ((grant & ~req) == 0);\nend",
+      "verdicts": [
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "sync_fifo",
+      "arm": "lint_retry",
+      "outcome": "PROVED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": true,
+      "twin": {
+        "verdict": "CAUGHT_BUG",
+        "twin_status": "REFUTED",
+        "seconds": 0.82,
+        "trace_cycles": 4
+      },
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.89,
+      "wall_s": 1.7,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (count >= 0 && count <= DEPTH && full == (count == DEPTH));\n    assert (empty == (count == 0));\nend",
+      "verdicts": [
+        "PROVED"
+      ]
+    },
+    {
+      "design": "counter",
+      "arm": "lint_retry",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": true,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 3,
+      "solver_s": 2.27,
+      "wall_s": 2.3,
+      "llm_calls": 3,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (!en || (cnt == $past(cnt) + 1));\n    assert (en || (cnt == $past(cnt)));\nend",
+      "verdicts": [
+        "REFUTED",
+        "REFUTED",
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "traffic_fsm",
+      "arm": "lint_retry",
+      "outcome": "PROVED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": true,
+      "twin": {
+        "verdict": "CAUGHT_BUG",
+        "twin_status": "REFUTED",
+        "seconds": 0.83,
+        "trace_cycles": 4
+      },
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.82,
+      "wall_s": 1.7,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (state == 2'd0 || state == 2'd1 || state == 2'd2 || state == 2'd3);\n    assert (!($past(state) == 2'd0 && state == 2'd2));\nend",
+      "verdicts": [
+        "PROVED"
+      ]
+    },
+    {
+      "design": "sync_fifo_buggy",
+      "arm": "lint_retry",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": true,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 3,
+      "solver_s": 2.42,
+      "wall_s": 2.4,
+      "llm_calls": 3,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (count <= DEPTH);\n    assert ((full == (count == DEPTH)) && (empty == (count == 0)));\nend",
+      "verdicts": [
+        "REFUTED",
+        "REFUTED",
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "rr_arbiter",
+      "arm": "lint_retry",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": false,
+      "use_refine": true,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 3,
+      "solver_s": 2.39,
+      "wall_s": 2.4,
+      "llm_calls": 3,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert ((grant == 0) || (grant & (grant - 1) == 0));\n    assert ((grant & ~req) == 0);\nend",
+      "verdicts": [
+        "REFUTED",
+        "REFUTED",
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "sync_fifo",
+      "arm": "repair_once",
+      "outcome": "PROVED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": false,
+      "twin": {
+        "verdict": "CAUGHT_BUG",
+        "twin_status": "REFUTED",
+        "seconds": 0.84,
+        "trace_cycles": 4
+      },
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.88,
+      "wall_s": 1.7,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (count >= 0 && count <= DEPTH && full == (count == DEPTH));\n    assert (empty == (count == 0));\nend",
+      "verdicts": [
+        "PROVED"
+      ]
+    },
+    {
+      "design": "counter",
+      "arm": "repair_once",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": false,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.76,
+      "wall_s": 0.8,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (!en || (cnt == $past(cnt) + 1));\n    assert (en || (cnt == $past(cnt)));\nend",
+      "verdicts": [
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "traffic_fsm",
+      "arm": "repair_once",
+      "outcome": "PROVED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": false,
+      "twin": {
+        "verdict": "CAUGHT_BUG",
+        "twin_status": "REFUTED",
+        "seconds": 0.77,
+        "trace_cycles": 4
+      },
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.8,
+      "wall_s": 1.6,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (state == 2'd0 || state == 2'd1 || state == 2'd2 || state == 2'd3);\n    assert (!($past(state) == 2'd0 && state == 2'd2));\nend",
+      "verdicts": [
+        "PROVED"
+      ]
+    },
+    {
+      "design": "sync_fifo_buggy",
+      "arm": "repair_once",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": false,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.84,
+      "wall_s": 0.8,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (count <= DEPTH);\n    assert ((full == (count == DEPTH)) && (empty == (count == 0)));\nend",
+      "verdicts": [
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "rr_arbiter",
+      "arm": "repair_once",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": false,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.8,
+      "wall_s": 0.8,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert ((grant == 0) || (grant & (grant - 1) == 0));\n    assert ((grant & ~req) == 0);\nend",
+      "verdicts": [
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "sync_fifo",
+      "arm": "repair_refine",
+      "outcome": "PROVED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": true,
+      "twin": {
+        "verdict": "CAUGHT_BUG",
+        "twin_status": "REFUTED",
+        "seconds": 0.84,
+        "trace_cycles": 4
+      },
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.9,
+      "wall_s": 1.7,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (count >= 0 && count <= DEPTH && full == (count == DEPTH));\n    assert (empty == (count == 0));\nend",
+      "verdicts": [
+        "PROVED"
+      ]
+    },
+    {
+      "design": "counter",
+      "arm": "repair_refine",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": true,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 3,
+      "solver_s": 2.3,
+      "wall_s": 2.3,
+      "llm_calls": 3,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (!en || (cnt == $past(cnt) + 1));\n    assert (en || (cnt == $past(cnt)));\nend",
+      "verdicts": [
+        "REFUTED",
+        "REFUTED",
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "traffic_fsm",
+      "arm": "repair_refine",
+      "outcome": "PROVED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": true,
+      "twin": {
+        "verdict": "CAUGHT_BUG",
+        "twin_status": "REFUTED",
+        "seconds": 0.77,
+        "trace_cycles": 4
+      },
+      "first_candidate_malformed": false,
+      "solver_runs": 1,
+      "solver_s": 0.83,
+      "wall_s": 1.6,
+      "llm_calls": 1,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (state == 2'd0 || state == 2'd1 || state == 2'd2 || state == 2'd3);\n    assert (!($past(state) == 2'd0 && state == 2'd2));\nend",
+      "verdicts": [
+        "PROVED"
+      ]
+    },
+    {
+      "design": "sync_fifo_buggy",
+      "arm": "repair_refine",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": true,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 3,
+      "solver_s": 2.44,
+      "wall_s": 2.4,
+      "llm_calls": 3,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert (count <= DEPTH);\n    assert ((full == (count == DEPTH)) && (empty == (count == 0)));\nend",
+      "verdicts": [
+        "REFUTED",
+        "REFUTED",
+        "REFUTED"
+      ]
+    },
+    {
+      "design": "rr_arbiter",
+      "arm": "repair_refine",
+      "outcome": "REFUTED",
+      "prompt": "grammar",
+      "sample": 0,
+      "use_repair": true,
+      "use_refine": true,
+      "twin": null,
+      "first_candidate_malformed": false,
+      "solver_runs": 3,
+      "solver_s": 2.4,
+      "wall_s": 2.4,
+      "llm_calls": 3,
+      "rewrites": {},
+      "final_source": "always @(posedge clk) if (af_started) begin\n    assert ((grant == 0) || (grant & (grant - 1) == 0));\n    assert ((grant & ~req) == 0);\nend",
+      "verdicts": [
+        "REFUTED",
+        "REFUTED",
+        "REFUTED"
+      ]
+    }
+  ]
+}

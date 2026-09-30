@@ -92,5 +92,17 @@
       "expr": "!$past(rst) || (count == 0 && prod_cnt == 0)",
       "why": "control: a claim about both blocks' state in the same cycle. It holds on both twins, which is the point -- it shows that a seam assertion is not automatically a discriminating one, and the twin run reports which are which."
     }
+  ],
+  "outputs": [
+    {
+      "name": "rd_data",
+      "width": "[7:0]"
+    },
+    {
+      "name": "empty"
+    },
+    {
+      "name": "full"
+    }
   ]
 }
