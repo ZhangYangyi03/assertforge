@@ -301,3 +301,18 @@ without a proof. The exit code is the verdict, so it drops straight into CI.
 ## License
 
 Apache-2.0.
+
+
+## Where this sits in the chain
+
+This is one of four tools, and `autoforge` drives them. The sibling that joins
+them is [eda-spine](https://github.com/ZhangYangyi03/eda-spine): it takes
+qoragent's kept netlist, asks this repo for the property that was proved of the
+RTL, and asks the same of the post-synthesis netlist. Measured there in three
+runs -- RTL PROVED, netlist PROVED, one perturbed line REFUTED -- and the third
+run is what makes the first two mean anything.
+
+That repo also carries the failure this repo is about, one level up: its first
+negative control was "drop `assume (rst)`", which came back **PROVED on a clean
+netlist**. An assertion whose own guard already covers the assumption does not
+fail when the assumption goes. The shipped control strips the guards too.
