@@ -316,3 +316,14 @@ That repo also carries the failure this repo is about, one level up: its first
 negative control was "drop `assume (rst)`", which came back **PROVED on a clean
 netlist**. An assertion whose own guard already covers the assumption does not
 fail when the assumption goes. The shipped control strips the guards too.
+
+## Related work by the same author
+
+The same claim -- *a number is meaningless until it is shown to survive its own
+verification* -- is made and measured in other domains:
+
+- [autoforge](https://github.com/ZhangYangyi03/autoforge) -- a tool's fitness, until an oracle outside the tool agrees
+- [agentic-eda](https://github.com/ZhangYangyi03/agentic-eda) -- a circuit's area, until equivalence to the reference netlist is proven
+- [debt-verify](https://github.com/ZhangYangyi03/debt-verify) -- a debt clause decision, until it survives the published revision record
+- [tool-market](https://github.com/ZhangYangyi03/tool-market) -- a tool's liveness, until the hash chain says which revision is live
+- [agent-safety-bench](https://github.com/ZhangYangyi03/agent-safety-bench) -- a model's safety compliance, measured rather than assumed
